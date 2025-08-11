@@ -5,7 +5,7 @@ import tifffile
 from loguru import logger
 import ome_types
 
-from .utils import read_metadata, batch_process, describe_image
+from pyimg.utils import batch_process, describe_image, read_metadata
 
 def pyramidize(image_path: str, output_path: str, min_size: int = 512):
     """

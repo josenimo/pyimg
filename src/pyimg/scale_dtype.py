@@ -7,7 +7,7 @@ import argparse
 from loguru import logger
 from ome_types.model import PixelType
 
-from .utils import read_metadata, batch_process, describe_image
+from pyimg.utils import batch_process, describe_image, read_metadata
 
 def scale_dtype(image_path, output_path, output_dtype="uint8"):
 

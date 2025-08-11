@@ -5,7 +5,7 @@ import ome_types
 import argparse
 from loguru import logger
 
-from .utils import batch_process, describe_image, read_metadata
+from pyimg.utils import batch_process, describe_image, read_metadata
 
 def binning(image_path, output_path, binning_factor:int = 2):
 
@@ -37,11 +37,11 @@ def main():
     parser = argparse.ArgumentParser(description="Scale the data type of a 3D image or a directory of images.")
     parser.add_argument("-i", "--input", dest="input", type=str, required=True, help="Input image file or directory path.")
     parser.add_argument("-o", "--output", dest="output", type=str, required=True, help="Output file or directory path.")
-    parser.add_argument("-b", "--binning", dest="binning_factor", type=str, default=2, help="Target binning. Defaults to 2.")
+    parser.add_argument("-b", "--binning", dest="binning_factor", type=int, default=2, help="Target binning. Defaults to 2.")
     parser.add_argument("-f", "--force", dest="force", action="store_true", help="Force overwrite of existing files.")
 
     args = parser.parse_args()
-    func_kwargs = {'output_binning': args.output_binning}
+    func_kwargs = {'binning_factor': args.binning_factor}
     batch_process(
         process_func=binning,
         input_path=args.input,

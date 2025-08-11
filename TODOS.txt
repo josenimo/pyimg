@@ -1,0 +1,14 @@
+Nice infrastructure
+
+- batch processing export places suffix in incorrect spot
+- logging has to be centralized and improved, too many lines for metadata channels
+- dask chunks should be logged in function, before and after rechunking
+- adding time information 
+- adding tqdm for batch_process
+
+Next function
+
+- Get_pyramid layer
+- Project multiple channels to single channel
+- quant 2.0
+- channel overlay
