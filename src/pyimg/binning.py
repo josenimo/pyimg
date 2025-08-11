@@ -1,15 +1,11 @@
 import dask.array as da
 import tifffile
-import numpy as np
 from dask_image import imread
 import ome_types
 import argparse
 from loguru import logger
-from ome_types import model
 
-from .utils import batch_process, describe_image
-from .utils import read_metadata, create_basic_ome
-
+from .utils import batch_process, describe_image, read_metadata
 
 def binning(image_path, output_path, binning_factor:int = 2):
 
@@ -31,7 +27,7 @@ def binning(image_path, output_path, binning_factor:int = 2):
     logger.info(f"Image shape after squeeze: {image.shape}, ndim: {image.ndim}")
 
     axes_to_bin = {1: binning_factor, 2: binning_factor}
-    output_image = da.coarsen(np.mean, image, axes_to_bin, trim_excess=True)
+    output_image = da.coarsen(da.mean, image, axes_to_bin, trim_excess=True)
 
     logger.info(f"Writing binned image to '{output_path}'...")
     tifffile.imwrite(output_path, output_image, bigtiff=True, description=ome_xml_bytes)

@@ -1516,7 +1516,7 @@ packages:
 - pypi: ./
   name: pyimg
   version: 0.1.0
-  sha256: 95ddb1b716cfe77e6b971b5cbef71b7a870cfa51ab312f4906facdddee80da01
+  sha256: 122295b9cf50033dc3ec72b3c553b17e1171098637dafabd87afa662fb04b2a7
   requires_dist:
   - dask>=2025.7.0,<2026
   - dask-image>=2024.5.3,<2025
