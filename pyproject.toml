@@ -23,3 +23,6 @@ pyimg = { path = ".", editable = true }
 [tool.pixi.project]
 channels = ["conda-forge"]
 platforms = ["osx-arm64"]
+
+[tool.pixi.dependencies]
+seaborn = ">=0.13.2,<0.14"
