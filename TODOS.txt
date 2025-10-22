@@ -12,3 +12,6 @@ Next function
 - Project multiple channels to single channel
 - quant 2.0
 - channel overlay
+
+
+pyimg vs. pyimage... decide

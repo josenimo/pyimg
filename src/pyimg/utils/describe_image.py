@@ -78,6 +78,7 @@ def describe_image(file_path: Path):
         min_val, max_val, mean_val = da.min(dask_arr), da.max(dask_arr), da.mean(dask_arr)
         
         # This triggers the actual computation
+        # CAN TAKE VERY LONG, CONSIDER TURNING OFF
         min_res, max_res, mean_res = da.compute(min_val, max_val, mean_val)
         
         logger.info(f"-> Min Pixel Value: {min_res}")

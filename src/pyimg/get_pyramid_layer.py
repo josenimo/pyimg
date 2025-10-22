@@ -25,7 +25,7 @@ def get_pyramid_layer(image_path, output_path, level):
     logger.info(f"Image shape: {image.shape}")
 
     logger.info(f"Writing layer image to '{output_path}'...")
-    tifffile.imwrite(output_path, output_path, bigtiff=True, description=ome_xml_bytes)
+    tifffile.imwrite(output_path, image, bigtiff=True, description=ome_xml_bytes)
     logger.success(f"Successfully created '{output_path}' ✨")
 
 def main():
