@@ -8,7 +8,7 @@ Nice infrastructure
 
 Next function
 
-- Get_pyramid layer
+- Get_pyramid layer (X)
 - Project multiple channels to single channel
 - quant 2.0
 - channel overlay

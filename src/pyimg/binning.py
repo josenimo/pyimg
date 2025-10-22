@@ -38,7 +38,7 @@ def main():
     parser.add_argument("-i", "--input", dest="input", type=str, required=True, help="Input image file or directory path.")
     parser.add_argument("-o", "--output", dest="output", type=str, required=True, help="Output file or directory path.")
     parser.add_argument("-b", "--binning", dest="binning_factor", type=int, default=2, help="Target binning. Defaults to 2.")
-    parser.add_argument("-f", "--force", dest="force", action="store_true", help="Force overwrite of existing files.")
+    parser.add_argument("-f", "--force", dest="force", action="store", help="Force overwrite of existing files.")
 
     args = parser.parse_args()
     func_kwargs = {'binning_factor': args.binning_factor}
