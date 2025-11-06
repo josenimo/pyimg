@@ -19,3 +19,4 @@ test_data/
 #uv 
 .venv
 
+.DS_Store

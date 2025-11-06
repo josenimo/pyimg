@@ -15,3 +15,5 @@ Next function
 
 
 pyimg vs. pyimage... decide
+
+Images are not opening in QuPath, test images so that they open in qupath

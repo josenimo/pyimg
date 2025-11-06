@@ -4,10 +4,8 @@
 
 This project is a collection of Python scripts for scientific image analysis, with a focus on handling large TIFF images and associated GeoJSON annotations. It is currently a "frankenstein project" with various image processing functions, and the user's overall goal is to organize all these functions into a sensible package for private use. The scripts are designed to be run from the command line and leverage libraries like `dask` for out-of-core processing of large datasets, `tifffile` for reading and writing TIFF files, and `geopandas` for handling geospatial data.
 
-The project is organized into three main modules:
+The project is organized into a main module:
 
-*   **`ImageUtils`**: A collection of utility scripts for various image and data manipulation tasks.
-*   **`pygeojson`**: A module for processing and converting GeoJSON files, particularly for extracting annotations.
 *   **`pyimg`**: A module for core image processing tasks like downscaling, pyramidizing, and projection.
 
 ## User's Goals and Concerns
