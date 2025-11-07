@@ -9,11 +9,11 @@ Nice infrastructure
 Next function
 
 - Get_pyramid layer (X)
-- Project multiple channels to single channel
+- Project multiple channels to single channel (X)
 - quant 2.0
 - channel overlay
-
-
-pyimg vs. pyimage... decide
-
+- writing image function (default pyramid unless opt out)
 Images are not opening in QuPath, test images so that they open in qupath
+- adapt backsub metadata functions
+- improve logging
+- benchmark performance on huge images

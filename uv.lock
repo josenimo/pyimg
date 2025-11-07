@@ -718,7 +718,7 @@ wheels = [
 ]
 
 [[package]]
-name = "pyimage"
+name = "pyimg"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -728,6 +728,7 @@ dependencies = [
     { name = "ipykernel" },
     { name = "loguru" },
     { name = "ome-types" },
+    { name = "pandas" },
     { name = "pytest" },
     { name = "seaborn" },
     { name = "tifffile" },
@@ -741,6 +742,7 @@ requires-dist = [
     { name = "ipykernel", specifier = ">=6.30.1,<7" },
     { name = "loguru", specifier = ">=0.7.3,<0.8" },
     { name = "ome-types", specifier = ">=0.6.1,<0.7" },
+    { name = "pandas", specifier = ">=2.3.3" },
     { name = "pytest", specifier = ">=8.4.1,<9" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "tifffile", specifier = ">=2025.6.11,<2026" },

@@ -2,12 +2,45 @@ import dask.array as da
 import numpy as np
 from typing import List, Dict, Any, Union
 import argparse
-import json
+import pandas as pd
 from dask_image import imread
 import tifffile
 from loguru import logger
+import ome_types
 
 from pyimg.utils import batch_process, describe_image, read_metadata
+
+#TODO sum is a bad default, high quantile, like 80%, therefore it will usually pick max value until 10 markers 
+#
+
+def config_from_csv(markers_csv_path: str, projection_method: str = "sum") -> List[Dict[str, Any]]:
+    """
+    Parses a markers CSV file using pandas to generate the projection_config.
+    """
+    try:
+        df = pd.read_csv(markers_csv_path)
+    except FileNotFoundError:
+        logger.error(f"Markers CSV file not found at: {markers_csv_path}")
+        raise
+
+    df = df[df['projection'].notna() & (df['projection'].str.strip() != '')]
+    projection_groups = df.groupby('projection')['Channel_number'].apply(list)
+
+    # list of dictionaries
+    projection_config = []
+    output_channel_counter = 0
+    for group_name, channels in projection_groups.sort_index().items():
+        config_item = {
+            "output_channel": output_channel_counter,
+            "input_channels": sorted([c - 1 for c in channels]),
+            "projection": projection_method,
+            "kwargs": {}
+        }
+        projection_config.append(config_item)
+        output_channel_counter += 1
+        logger.info(f"Found group '{group_name}' with channels {channels}")
+
+    return projection_config
 
 def _validate_projection_config(
     projection_config: List[Dict[str, Any]],
@@ -54,7 +87,7 @@ def _validate_projection_config(
 
 def scale_channels_dask(
     img_stack: da.Array,
-    min_max_quantiles: Union[List[float], tuple[float, float]] = (0.0, 1.0)
+    min_max_quantiles: Union[List[float], tuple[float, float]] = (0.01, 0.999)
 ) -> da.Array:
     """
     Lazily scale each channel of a Dask array based on quantiles.
@@ -78,8 +111,8 @@ def scale_channels_dask(
 def merge_channels_dask(
     img_stack: da.Array,
     projection_config: List[Dict[str, Any]],
-    scale_before_project: bool = False,
-    scale_quantiles: Union[List[float], tuple[float, float]] = (0.0, 1.0)
+    scale_before_project: bool = True,
+    scale_quantiles: Union[List[float], tuple[float, float]] = (0.01, 0.999)
 ) -> da.Array:
     """
     Lazily merge subsets of channels from a (C, Y, X) Dask array based on a flexible configuration.
@@ -108,12 +141,8 @@ def merge_channels_dask(
             merged_channel = selected_channels.mean(axis=0, **proj_kwargs)
         elif proj_method == "max":
             merged_channel = selected_channels.max(axis=0, **proj_kwargs)
-        elif proj_method == "quantile":
-            if 'q' not in proj_kwargs:
-                raise ValueError("Quantile projection requires 'q' in kwargs.")
-            merged_channel = selected_channels.quantile(q=proj_kwargs['q'], axis=0)
         else:
-            raise ValueError(f"Unknown projection method: {proj_method}. Use 'sum', 'mean', 'max', or 'quantile'.")
+            raise ValueError(f"Unknown projection method: {proj_method}. Use 'sum', 'mean', or 'max'.")
 
         output_channels_list.append(merged_channel)
 
@@ -121,51 +150,52 @@ def merge_channels_dask(
     return output_stack
 
 def main():
-    parser = argparse.ArgumentParser(description="Project channels of a TIFF image using various methods.")
+    parser = argparse.ArgumentParser(description="Project channels of a TIFF image using a CSV markers file.")
     parser.add_argument("-i", "--input", required=True, help="Input image file or directory.")
     parser.add_argument("-o", "--output", required=True, help="Output file or directory.")
-    
-    # Simplified CLI arguments
+    parser.add_argument("--markers-csv", required=True, help="Path to the markers CSV file.")
     parser.add_argument(
-        "-p", "--projection_config",
+        "--projection-method",
         type=str,
-        required=True,
-        help="JSON string defining the projection. "
-             "Example: '[{\'output_channel\': 0, \'input_channels\': [0, 1], \'projection\': \'sum\'}, "
-             "({\'output_channel\': 1, \'input_channels\': [2], \'projection\': \'quantile\', \'kwargs\': {\'q\': 0.9}})]"
+        default="sum",
+        choices=["sum", "mean", "max"],
+        help="The projection method to apply to all groups (default: sum)."
     )
-    parser.add_argument("--scale", action="store_true", help="Enable scaling before projection.")
-    parser.add_argument("--scale_quantiles", type=float, nargs=2, default=[0.0, 1.0], help="Min and max quantiles for scaling.")
     parser.add_argument("-f", "--force", action="store_true", help="Force overwrite of existing files.")
 
     args = parser.parse_args()
 
-    try:
-        projection_config = json.loads(args.projection_config)
-    except json.JSONDecodeError:
-        logger.error("Invalid JSON in --projection_config argument.")
-        return
-
     def process_image(image_path, output_path):
         describe_image(image_path)
         
+        try:
+            projection_config = config_from_csv(args.markers_csv, args.projection_method)
+        except FileNotFoundError:
+            return
+
+        if not projection_config:
+            logger.warning("Projection config is empty. No output will be generated.")
+            return
+
         img = imread.imread(image_path)
         
         projected_img = merge_channels_dask(
             img,
             projection_config=projection_config,
-            scale_before_project=args.scale,
-            scale_quantiles=args.scale_quantiles
+            scale_before_project=True,
+            scale_quantiles=(0.01, 0.999)
         )
         
-        # Attempt to preserve metadata
         try:
             ome_metadata = read_metadata(image_path)
-            # Modify metadata for the new image (e.g., number of channels)
-            ome_metadata.images[0].pixels.size_c = len(projection_config)
-            ome_metadata.images[0].pixels.channels = ome_metadata.images[0].pixels.channels[:len(projection_config)]
-            ome_xml_bytes = ome_types.to_xml(ome_metadata).encode('utf-8')
-        except Exception:
+            if ome_metadata:
+                ome_metadata.images[0].pixels.size_c = len(projection_config)
+                ome_metadata.images[0].pixels.channels = ome_metadata.images[0].pixels.channels[:len(projection_config)]
+                ome_xml_bytes = ome_types.to_xml(ome_metadata).encode('utf-8')
+            else:
+                ome_xml_bytes = None
+        except Exception as e:
+            logger.warning(f"Could not update OME metadata: {e}")
             ome_xml_bytes = None
 
         logger.info(f"Writing projected image to '{output_path}'...")
