@@ -178,7 +178,22 @@ def main():
             return
 
         img = imread.imread(image_path)
+        while img.ndim > 3 and img.shape[0] == 1:
+            img = img.squeeze(axis=0)
         
+        logger.info(f"Dask chunks before rechunking: {img.chunksize}")
+        ndim = img.ndim
+        chunks = {}
+        if ndim >= 2:
+            for i in range(ndim - 2):
+                chunks[i] = 1
+            chunks[ndim - 2] = 512
+            chunks[ndim - 1] = 512
+        else:
+            chunks = {0: 512}
+        img = img.rechunk(chunks=chunks)
+        logger.info(f"Dask chunks after rechunking: {img.chunksize}")
+
         projected_img = merge_channels_dask(
             img,
             projection_config=projection_config,
@@ -199,7 +214,11 @@ def main():
             ome_xml_bytes = None
 
         logger.info(f"Writing projected image to '{output_path}'...")
-        tifffile.imwrite(output_path, projected_img.compute(), bigtiff=True, description=ome_xml_bytes)
+        write_kwargs = {"bigtiff": True, "description": ome_xml_bytes}
+        if projected_img.ndim >= 2:
+            write_kwargs["tile"] = (512, 512)
+            write_kwargs["compression"] = "zlib"
+        tifffile.imwrite(output_path, projected_img, **write_kwargs)
         logger.success(f"Successfully created '{output_path}' ✨")
 
     batch_process(

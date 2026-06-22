@@ -31,8 +31,9 @@ def pyramidize(image_path: str, output_path: str, min_size: int = 512):
 
     # load image, ASSUME CYX
     image = imread.imread(image_path)
+    logger.info(f"Dask chunks before rechunking: {image.chunksize}")
     image = image.rechunk(chunks={0:1, 1:512, 2:512})
-    logger.info(f"Image in dask: {image.shape}, ndim: {image.ndim}, chunksize {image.chunksize}")
+    logger.info(f"Dask chunks after rechunking: {image.chunksize}")
 
     # create pyramid lazy objects
     logger.info(f"Generating pyramid for {image_path} with shape {image.shape}")
@@ -53,6 +54,7 @@ def pyramidize(image_path: str, output_path: str, min_size: int = 512):
                 subfiletype= 1 if i > 0 else 0,
                 photometric= "minisblack",
                 compression= "zlib",
+                tile= (512, 512),
                 description= ome_xml_bytes if i == 0 else None,
                 subifds=(len(pyramid) - 1) if i == 0 else None,
             )

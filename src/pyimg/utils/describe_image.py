@@ -54,11 +54,13 @@ def describe_image(file_path: Path):
                 )
                 logger.info(pixels_info)
 
-                if  pixels.channels:
-                    logger.info(f"    - Channels ({len(pixels.channels)}):")
-                    for chan in pixels.channels:
-                        color_hex = f"#{chan.color}" if chan.color else "N/A"
-                        logger.info(f"      - Name: '{chan.name or 'Unnamed'}', Color: {color_hex}")
+                if pixels.channels:
+                    channel_names = [chan.name or 'Unnamed' for chan in pixels.channels]
+                    if len(channel_names) > 5:
+                        summary_names = ", ".join(channel_names[:5]) + f", ... and {len(channel_names) - 5} more channels"
+                    else:
+                        summary_names = ", ".join(channel_names)
+                    logger.info(f"    - Channels ({len(pixels.channels)}): [{summary_names}]")
 
         except ValueError:
             # This is common if the file is a standard TIFF without OME-XML

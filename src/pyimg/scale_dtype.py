@@ -103,7 +103,11 @@ def scale_dtype(image_path, output_path, output_dtype="uint8"):
         output_image = ((image.astype(np.float32) - mins) / scales).astype(output_dtype)
 
     logger.info(f"Writing scaled image to '{output_path}'...")
-    tifffile.imwrite(output_path, output_image, bigtiff=True, description=ome_xml_bytes)
+    write_kwargs = {"bigtiff": True, "description": ome_xml_bytes}
+    if ndim >= 2:
+        write_kwargs["tile"] = (512, 512)
+        write_kwargs["compression"] = "zlib"
+    tifffile.imwrite(output_path, output_image, **write_kwargs)
     logger.success(f"Successfully created '{output_path}' ✨")
 
 def main():

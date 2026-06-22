@@ -30,22 +30,14 @@ def batch_process(
     input_path_obj = Path(input_path)
     output_path_obj = Path(output_path)
 
-    if input_path_obj.is_dir():
-        input_files = generate_input_paths(input_path, file_ending=file_ending)
-        if output_path_obj.is_file():
-            logger.error("Input is a directory, but output is a file. Please specify an output directory.")
-            return
-        output_path_obj.mkdir(parents=True, exist_ok=True)
-        output_files = generate_output_paths(input_files, input_path, suffix=output_suffix)
+    if input_path_obj.is_dir() and output_path_obj.is_file():
+        logger.error("Input is a directory, but output is a file. Please specify an output directory.")
+        return
 
-    elif input_path_obj.is_file():
-        input_files = [input_path_obj]
-        if output_path_obj.is_dir():
-            output_path_obj.mkdir(parents=True, exist_ok=True)
-            output_files = [output_path_obj / f"{input_path_obj.stem}{output_suffix}{input_path_obj.suffix}"]
-        else:
-            output_files = [output_path_obj]
+    input_files = generate_input_paths(input_path, file_ending=file_ending)
+    output_files = generate_output_paths(input_files, input_path, output_path, suffix=output_suffix)
 
+    import time
     logger.info(f"Found {len(input_files)} image(s) to process.")
 
     for in_file, out_file in zip(input_files, output_files):
@@ -54,7 +46,12 @@ def batch_process(
             continue
         
         logger.info(f"Processing {in_file.name} -> {out_file.name}")
+        start_time = time.perf_counter()
         try:
             process_func(str(in_file), str(out_file), **func_kwargs)
+            elapsed = time.perf_counter() - start_time
+            logger.info(f"Finished processing {in_file.name} in {elapsed:.2f} seconds.")
         except Exception as e:
-            logger.error(f"Failed to process {in_file.name}: {e}")
+            elapsed = time.perf_counter() - start_time
+            logger.error(f"Failed to process {in_file.name} after {elapsed:.2f} seconds: {e}")
+

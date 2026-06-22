@@ -102,7 +102,11 @@ def binning(image_path, output_path, binning_factor:int = 2):
     ome_xml_bytes = ome_types.to_xml(ome_metadata).encode('utf-8')
 
     logger.info(f"Writing binned image to '{output_path}'...")
-    tifffile.imwrite(output_path, output_image, bigtiff=True, description=ome_xml_bytes)
+    write_kwargs = {"bigtiff": True, "description": ome_xml_bytes}
+    if ndim >= 2:
+        write_kwargs["tile"] = (512, 512)
+        write_kwargs["compression"] = "zlib"
+    tifffile.imwrite(output_path, output_image, **write_kwargs)
     logger.success(f"Successfully created '{output_path}' ✨")
 
 def main():
