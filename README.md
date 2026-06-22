@@ -127,4 +127,16 @@ To keep development consistent between sessions, please adhere to the following 
    - Zarr v3 abstract classes require implementations for `set_partial_values` and `supports_partial_writes`. Since `tifffile`'s `ZarrTiffStore` inherits from `Store` but does not define these, they are monkeypatched dynamically on package initialization in `src/pyimg/__init__.py`.
 6. **Dependencies Management**:
    - Use `uv add <package>` instead of `uv pip install <package>` to manage dependency declarations in `pyproject.toml`.
+7. **Git Commit & Staging Strategy**:
+   - **Atomic Commits**: Stage and commit edits in small, cohesive, logical blocks rather than staging all files at once with a generic message.
+   - **Conventional Commits**: Use the Conventional Commits format to document changes cleanly:
+     - `feat(<scope>): <description>` (e.g. `feat(cli): add unified subcommand entrypoint`).
+     - `fix(<scope>): <description>` (e.g. `fix(batch): preserve double extensions like .ome.tif`).
+     - `perf(<scope>): <description>` (e.g. `perf(project): compute projections out-of-core`).
+     - `test(<scope>): <description>` (e.g. `test(roadmap): add comprehensive validation suite`).
+     - `docs(<scope>): <description>` (e.g. `docs(readme): document design decisions and git conventions`).
+   - **Pre-commit Verification**:
+     - Check file changes with `git status` and `git diff`.
+     - Stage related files specifically (e.g. `git add src/pyimg/compress.py tests/test_roadmap.py`) instead of using blanket `git add .` for multi-feature changes.
+     - Verify staged changes via `git diff --staged` before running `git commit`.
 
