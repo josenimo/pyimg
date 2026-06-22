@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pyimg.binning import binning
 from pyimg.utils.read_metadata import read_metadata
-from .helpers import create_test_image
+from tests.helpers import create_test_image
 
 @pytest.mark.parametrize(
     "shape,layout,dtype,has_metadata,channel_names,pixel_size,binning_factor",
