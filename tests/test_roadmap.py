@@ -162,3 +162,59 @@ def test_cli_subcommands(tmp_path):
         "--task-args", '{"output_dtype": "uint8"}'
     ])
     assert result.exit_code == 0
+
+def test_benchmarking_suite(tmp_path):
+    """Test run_benchmarking_suite function and its CLI integration."""
+    from pyimg.benchmark import run_benchmarking_suite
+    from pyimg.cli import cli
+    
+    # 1. Create a small dummy image for testing
+    img_path = tmp_path / "test_suite_input.ome.tif"
+    create_test_image(img_path, (3, 64, 64), dtype=np.uint8, layout="CYX")
+    
+    # 2. Run the suite directly
+    out_dir = tmp_path / "suite_direct_out"
+    out_dir.mkdir()
+    run_benchmarking_suite(input_path=str(img_path), output_dir=str(out_dir))
+    
+    # Check that outputs are created
+    assert (out_dir / "benchmark_results.csv").exists()
+    assert (out_dir / "benchmark_results.png").exists()
+    
+    # Check that all temporary processing outputs were cleaned up
+    leftovers = list(out_dir.glob("*_bench_*.tif"))
+    assert len(leftovers) == 0
+    
+    # 3. Run the suite via Click CLI
+    cli_out_dir = tmp_path / "suite_cli_out"
+    cli_out_dir.mkdir()
+    runner = CliRunner()
+    result = runner.invoke(cli, [
+        "benchmark",
+        "-i", str(img_path),
+        "-o", str(cli_out_dir)
+    ])
+    assert result.exit_code == 0
+    assert (cli_out_dir / "benchmark_results.csv").exists()
+    assert (cli_out_dir / "benchmark_results.png").exists()
+    
+    # Check cleanup for CLI output
+    cli_leftovers = list(cli_out_dir.glob("*_bench_*.tif"))
+    assert len(cli_leftovers) == 0
+
+    # 4. Run the suite directly with keep_images=True
+    qc_out_dir = tmp_path / "suite_qc_out"
+    qc_out_dir.mkdir()
+    run_benchmarking_suite(input_path=str(img_path), output_dir=str(qc_out_dir), keep_images=True)
+    
+    # Check that outputs are created
+    assert (qc_out_dir / "benchmark_results.csv").exists()
+    assert (qc_out_dir / "benchmark_results.png").exists()
+    
+    # Check that intermediate benchmark outputs were NOT cleaned up
+    qc_leftovers = list(qc_out_dir.glob("*_bench_*.tif"))
+    assert len(qc_leftovers) > 0
+    stem = img_path.name.split('.')[0]
+    assert (qc_out_dir / f"{stem}_bench_scaled.ome.tif").exists()
+    assert (qc_out_dir / f"{stem}_bench_binned.ome.tif").exists()
+
