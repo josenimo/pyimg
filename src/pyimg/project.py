@@ -85,6 +85,25 @@ def _validate_projection_config(
 
     return num_out_channels
 
+def get_optimal_num_workers() -> int:
+    """Calculates the optimal number of Dask workers based on system RAM and CPU count."""
+    import psutil
+    import os
+    try:
+        vm = psutil.virtual_memory()
+        available_ram = vm.available
+        # A 5000x5000 float32 channel requires ~100MB of memory.
+        # Let's say each Dask worker thread requires ~200MB of RAM during calculation.
+        worker_mem_estimate = 200 * 1024 * 1024
+        # Limit Dask threadpool to use at most 60% of available system memory.
+        max_workers_by_ram = max(1, int((available_ram * 0.6) // worker_mem_estimate))
+        
+        cpu_count = os.cpu_count() or 1
+        return max(1, min(cpu_count, max_workers_by_ram))
+    except Exception:
+        import os
+        return os.cpu_count() or 1
+
 def scale_channels_dask(
     img_stack: da.Array,
     min_max_quantiles: Union[List[float], tuple[float, float]] = (0.01, 0.999)
@@ -97,9 +116,14 @@ def scale_channels_dask(
         raise ValueError(f"Input array must be 3D (C, Y, X). Got {img_stack.ndim} dimensions.")
 
     def scale_single_channel(channel):
-        q_min, q_max = da.percentile(channel, [min_max_quantiles[0] * 100, min_max_quantiles[1] * 100])
-        clipped = da.clip(channel, q_min, q_max)
-        scaled = (clipped - q_min) / (q_max - q_min)
+        q_min, q_max = da.percentile(channel, [min_max_quantiles[0] * 100, min_max_quantiles[1] * 100], axis=(0, 1))
+        q_min_f = q_min.astype(np.float32)
+        q_max_f = q_max.astype(np.float32)
+        denominator = q_max_f - q_min_f
+        denominator = da.where(denominator == 0.0, 1.0, denominator)
+        
+        clipped = da.clip(channel, q_min_f, q_max_f).astype(np.float32)
+        scaled = (clipped - q_min_f) / denominator
         return scaled
 
     scaled_channels = [scale_single_channel(img_stack[i]) for i in range(img_stack.shape[0])]
@@ -213,12 +237,17 @@ def main():
             logger.warning(f"Could not update OME metadata: {e}")
             ome_xml_bytes = None
 
+        import dask
         logger.info(f"Writing projected image to '{output_path}'...")
         write_kwargs = {"bigtiff": True, "description": ome_xml_bytes}
         if projected_img.ndim >= 2:
             write_kwargs["tile"] = (512, 512)
             write_kwargs["compression"] = "zlib"
-        tifffile.imwrite(output_path, projected_img, **write_kwargs)
+        
+        num_workers = get_optimal_num_workers()
+        logger.info(f"Using {num_workers} Dask threads based on available memory limit.")
+        with dask.config.set(num_workers=num_workers):
+            tifffile.imwrite(output_path, projected_img, **write_kwargs)
         logger.success(f"Successfully created '{output_path}' ✨")
 
     batch_process(
