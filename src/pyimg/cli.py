@@ -143,12 +143,18 @@ def project(input_path, output_path, markers_csv, projection_method, force):
             logger.warning(f"Could not update OME metadata: {e}")
             ome_xml_bytes = None
 
+        import dask
+        from pyimg.project import get_optimal_num_workers
         logger.info(f"Writing projected image to '{output_path}'...")
         write_kwargs = {"bigtiff": True, "description": ome_xml_bytes}
         if projected_img.ndim >= 2:
             write_kwargs["tile"] = (512, 512)
             write_kwargs["compression"] = "zlib"
-        tifffile.imwrite(output_path, projected_img, **write_kwargs)
+        
+        num_workers = get_optimal_num_workers()
+        logger.info(f"Using {num_workers} Dask threads based on available memory limit.")
+        with dask.config.set(num_workers=num_workers):
+            tifffile.imwrite(output_path, projected_img, **write_kwargs)
         logger.success(f"Successfully created '{output_path}' ✨")
 
     batch_process(
@@ -194,20 +200,27 @@ def compress(input_path, output_path, compression, check, force):
     )
 
 @cli.command("benchmark")
-@click.option("-i", "--input", "input_path", required=True, type=click.Path(exists=True), help="Input pyramidal image file or directory.")
-@click.option("-o", "--output", "output_path", required=True, type=click.Path(), help="Output file or directory path.")
-@click.option("--task", "task_name", default="scale", show_default=True, type=click.Choice(["scale", "bin", "pyramid", "layer", "project", "compress"]), help="The operation to benchmark.")
+@click.option("-i", "--input", "input_path", required=False, type=click.Path(exists=True), help="Input image file. Defaults to TD_15_TNBC_subset.ome.tif.")
+@click.option("-o", "--output", "output_path", required=False, type=click.Path(), help="Output file or directory path.")
+@click.option("--task", "task_name", default="all", show_default=True, type=click.Choice(["all", "scale", "bin", "pyramid", "layer", "project", "compress"]), help="The operation to benchmark. 'all' runs the entire suite.")
 @click.option("--task-args", "task_args_json", default="{}", show_default=True, help="JSON string representing keyword arguments for the task.")
-def benchmark(input_path, output_path, task_name, task_args_json):
+@click.option("--keep-images", is_flag=True, help="Keep benchmark output images for human QC.")
+def benchmark(input_path, output_path, task_name, task_args_json, keep_images):
     """Run computational benchmarking suite for resource profiling."""
-    from pyimg.benchmark import run_benchmark
+    from pyimg.benchmark import run_benchmark, run_benchmarking_suite
     try:
         task_args = json.loads(task_args_json)
     except json.JSONDecodeError as e:
         click.echo(f"Error parsing --task-args as JSON: {e}", err=True)
         return
 
-    run_benchmark(input_path, output_path, task_name, task_args)
+    if task_name == "all":
+        run_benchmarking_suite(input_path, output_path, keep_images=keep_images)
+    else:
+        if not output_path:
+            click.echo("Error: --output is required for profiling individual tasks.", err=True)
+            return
+        run_benchmark(input_path, output_path, task_name, task_args)
 
 if __name__ == "__main__":
     cli()
