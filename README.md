@@ -40,6 +40,21 @@ python src/pyimg/scale_dtype.py --input /path/to/large_image.tif --output /path/
 python src/pyimg/pyramidize.py --input /path/to/image.ome.tif --output /path/to/pyramid.ome.tif
 ```
 
+#### Example: Running the Performance Benchmarking Suite
+
+To profile resource utilization (Wall-clock/CPU duration, peak memory) across all processing steps sequentially on an image:
+```bash
+python src/pyimg/benchmark.py --input /path/to/image.ome.tif --output-dir /path/to/output_dir
+```
+Or via the unified CLI `pyimg`:
+```bash
+pyimg benchmark --input /path/to/image.ome.tif --output /path/to/output_dir
+```
+*Note: To prevent disk storage pollution, all intermediate output images are automatically cleaned up at the end of each benchmark step. To keep the processed benchmark images (e.g. for visual quality control or viewing in QuPath), pass the `--keep-images` flag:*
+```bash
+pyimg benchmark --input /path/to/image.ome.tif --output /path/to/output_dir --keep-images
+```
+
 ### Python Functions
 
 The core logic of each module can be imported and used directly in your Python scripts or notebooks.
@@ -97,8 +112,12 @@ uv run pytest
   - Added `compress_image` to convert TIFF compressions (Zlib, LZW, JPEG, or Uncompressed) out-of-core.
 - **`cli.py` (Unified CLI Entrypoint):**
   - Consolidated all scripts into a unified Click entrypoint (`pyimg`). Exposed subcommands: `scale`, `bin`, `pyramid`, `layer`, `project`, `compress`, and `benchmark`.
-- **Benchmarking Suite:**
-  - Implemented `benchmark.py` mapping execution resource utilization (peak RAM footprint via process RSS polling thread, CPU process time, and Wall-clock time).
+- **Benchmarking Suite & Automated Suite Execution:**
+  - Implemented `run_benchmark` mapping execution resource utilization (peak RAM footprint via background RSS polling thread, CPU process time, and Wall-clock time).
+  - Built an automated benchmarking suite (`run_benchmarking_suite`) running `scale`, `bin`, `pyramid`, `layer`, `project`, and `compress` sequentially.
+  - Generates automated tidy console reports, CSV outputs (`benchmark_results.csv`), and premium performance plots (`benchmark_results.png`).
+  - Added option to preserve intermediate outputs for QuPath QC analysis (`--keep-images`).
+  - Implemented automated `float32` scaling precision and memory-aware Dask thread concurrency limiting to optimize peak memory footprint.
 
 ---
 
@@ -135,8 +154,10 @@ To keep development consistent between sessions, please adhere to the following 
      - `perf(<scope>): <description>` (e.g. `perf(project): compute projections out-of-core`).
      - `test(<scope>): <description>` (e.g. `test(roadmap): add comprehensive validation suite`).
      - `docs(<scope>): <description>` (e.g. `docs(readme): document design decisions and git conventions`).
-   - **Pre-commit Verification**:
-     - Check file changes with `git status` and `git diff`.
-     - Stage related files specifically (e.g. `git add src/pyimg/compress.py tests/test_roadmap.py`) instead of using blanket `git add .` for multi-feature changes.
-     - Verify staged changes via `git diff --staged` before running `git commit`.
-
+    - **Pre-commit Verification**:
+      - Check file changes with `git status` and `git diff`.
+      - Stage related files specifically (e.g. `git add src/pyimg/compress.py tests/test_roadmap.py`) instead of using blanket `git add .` for multi-feature changes.
+      - Verify staged changes via `git diff --staged` before running `git commit`.
+8. **Memory & Concurrency Throttling**:
+   - For memory-intensive global reductions (like quantile scaling), explicitly cast computation arrays to `float32` to avoid `float64` promotion.
+   - Use the `get_optimal_num_workers` helper to calculate safe threadpools based on available system memory, and configure the computation using `dask.config.set(num_workers=...)` to prevent OOM errors on large-scale datasets.
