@@ -29,17 +29,26 @@ def pyramidize(image_path: str, output_path: str, min_size: int = 512):
     # unsure how to log this into metadata
     ome_xml_bytes = ome_types.to_xml(ome_metadata).encode('utf-8')
 
-    # load image, ASSUME CYX
+    # load image; the last two axes are spatial (YX), any leading axes are kept as-is
     image = imread.imread(image_path)
+    # dask-image prepends a frame axis for single-page files, e.g. a planar CYX page
+    # is read as (1, C, Y, X); drop such leading singleton axes so levels stay CYX.
+    while image.ndim > 2 and image.shape[0] == 1:
+        image = image[0]
+    ndim = image.ndim
+
     logger.info(f"Dask chunks before rechunking: {image.chunksize}")
-    image = image.rechunk(chunks={0:1, 1:512, 2:512})
+    chunks = {i: 1 for i in range(ndim - 2)}
+    chunks.update({ndim - 2: 512, ndim - 1: 512})
+    image = image.rechunk(chunks=chunks)
     logger.info(f"Dask chunks after rechunking: {image.chunksize}")
 
     # create pyramid lazy objects
     logger.info(f"Generating pyramid for {image_path} with shape {image.shape}")
+    downsample_factors = {i: 1 for i in range(ndim - 2)}
+    downsample_factors.update({ndim - 2: 3, ndim - 1: 3})
     pyramid = [image]
-    while min(pyramid[-1].shape[1:]) > min_size:
-        downsample_factors = {0: 1, 1: 3, 2: 3}
+    while min(pyramid[-1].shape[-2:]) > min_size:
         downsampled = da.coarsen(da.mean, pyramid[-1], downsample_factors, trim_excess=True).astype(image.dtype)
         pyramid.append(downsampled)
     logger.info(f"Generated {len(pyramid)} pyramid levels.")
