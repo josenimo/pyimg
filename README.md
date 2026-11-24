@@ -22,6 +22,10 @@ To install the package and its dependencies, navigate to the project root and ru
 pip install .
 ```
 
+### spatialdata compatibility
+
+pyimg is co-installable with `spatialdata>=0.9.0` (which requires `dask>=2026.3` and `zarr>=3`). For development, `spatialdata` is part of the `dev` dependency group, so `uv sync` installs it and `tests/test_spatialdata_compat.py` checks that pyimg-produced pyramids load into a `SpatialData` object and round-trip through zarr.
+
 ## Usage
 
 ### Command-Line Interface
