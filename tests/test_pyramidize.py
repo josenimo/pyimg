@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import tifffile
 
 from pyimg.pyramidize import pyramidize
@@ -23,3 +24,13 @@ def test_pyramidize_single_page_multichannel(tmp_path):
     assert [lvl.shape for lvl in levels] == [(3, 1200, 1200), (3, 400, 400), (3, 133, 133)]
     np.testing.assert_array_equal(levels[0], tifffile.imread(src))
 
+
+@pytest.mark.parametrize("shape", [(1200, 1200), (3, 1200, 1200)])
+def test_pyramidize_without_ome_metadata(tmp_path, shape):
+    src = create_test_image(tmp_path / "plain.tif", shape, np.uint8, has_metadata=False)
+    out = tmp_path / "plain_pyramid.ome.tif"
+    pyramidize(str(src), str(out), min_size=200)
+
+    levels = _levels(out)
+    assert [lvl.shape[-2:] for lvl in levels] == [(1200, 1200), (400, 400), (133, 133)]
+    np.testing.assert_array_equal(levels[0].reshape(shape), tifffile.imread(src))

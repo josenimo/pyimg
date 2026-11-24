@@ -27,7 +27,9 @@ def pyramidize(image_path: str, output_path: str, min_size: int = 512):
     # load and change image metadata
     ome_metadata = read_metadata(image_path)
     # unsure how to log this into metadata
-    ome_xml_bytes = ome_types.to_xml(ome_metadata).encode('utf-8')
+    if ome_metadata is None:
+        logger.warning("Input has no OME-XML metadata; writing pyramid without it.")
+    ome_xml_bytes = ome_types.to_xml(ome_metadata).encode('utf-8') if ome_metadata else None
 
     # load image; the last two axes are spatial (YX), any leading axes are kept as-is
     image = imread.imread(image_path)
