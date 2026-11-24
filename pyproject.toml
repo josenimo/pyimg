@@ -9,20 +9,26 @@ authors = [
 requires-python = ">=3.12, <3.13"
 
 dependencies = [
-    "dask>=2025.7.0,<2026",
-    "dask-image>=2024.5.3,<2025",
-    "tifffile>=2026.5.2",
-    "ipykernel>=6.30.1,<7",
-    "loguru>=0.7.3,<0.8",
-    "pytest>=8.4.1,<9",
-    "click>=8.1.7,<9",
-    "ome-types>=0.6.1,<0.7",
+    "dask>=2026.11.0",
+    "dask-image>=2026.5.0",
+    "tifffile>=2026.11.16",
+    "ipykernel>=7.4.0",
+    "loguru>=0.8.0",
+    "pytest>=9.2.0",
+    "click>=8.5.1",
+    "ome-types>=0.7.0",
     "seaborn>=0.13.2",
-    "pandas>=2.3.3",
-    "zarr>=3.0.0,<3.1.0",
-    "psutil>=7.1.1",
-    "imagecodecs>=2026.6.6",
+    "pandas>=3.1.1",
+    "zarr>=3.4.2",
+    "psutil>=7.2.2",
+    "imagecodecs>=2026.11.11",
 ]
+
+[dependency-groups]
+dev = [
+    "spatialdata>=0.9.0",
+]
+
 [project.scripts]
 pyimg = "pyimg.cli:cli"
 
