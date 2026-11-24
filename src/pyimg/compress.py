@@ -1,12 +1,15 @@
 import argparse
+import itertools
 from pathlib import Path
-import dask.array as da
-from dask_image import imread
 import tifffile
 from loguru import logger
 import ome_types
 
 from pyimg.utils import batch_process, describe_image, read_metadata
+from pyimg.utils.tiff_zarr import open_level_zarr, spatial_axes
+
+TILE_SIZE = 512
+WRITE_BUFFER_BYTES = 64 * 2**20
 
 def check_compression(image_path: str) -> dict[int, str]:
     """Checks the compression schema of all pages in a TIFF/OME-TIFF image.
@@ -51,38 +54,45 @@ def compress_image(image_path: str, output_path: str, compression: str = "zlib")
     else:
         target_compression = comp_map[comp_key]
 
-    # Load image lazily
-    image = imread.imread(image_path)
-    ndim = image.ndim
-
-    # Rechunk to standard 512x512 spatial blocks for out-of-core computation
-    logger.info(f"Dask chunks before rechunking: {image.chunksize}")
-    chunks = {}
-    if ndim >= 2:
-        for i in range(ndim - 2):
-            chunks[i] = 1
-        chunks[ndim - 2] = 512
-        chunks[ndim - 1] = 512
-    else:
-        chunks = {0: 512}
-    image = image.rechunk(chunks=chunks)
-    logger.info(f"Dask chunks after rechunking: {image.chunksize}")
-
     # Read and preserve OME metadata
     ome_metadata = read_metadata(image_path)
     ome_xml_bytes = ome_types.to_xml(ome_metadata).encode('utf-8') if ome_metadata else None
 
-    logger.info(f"Writing compressed image to '{output_path}' using '{compression}'...")
-    write_kwargs = {"bigtiff": True, "description": ome_xml_bytes}
-    if ndim >= 2:
-        write_kwargs["tile"] = (512, 512)
-        if target_compression:
-            write_kwargs["compression"] = target_compression
-    else:
-        if target_compression:
-            write_kwargs["compression"] = target_compression
+    # Stream tiles straight from the source file's own tiles/strips. dask-image
+    # would load each page (a full channel plane, GiBs for whole slides) at once.
+    with tifffile.TiffFile(image_path) as tif:
+        source = open_level_zarr(tif, level=0)
+        axes = tif.series[0].axes
+        y_ax, x_ax = spatial_axes(axes)
+        rgb = axes.endswith("YXS")
+        if not (rgb or axes.endswith("YX")):
+            raise ValueError(f"Unsupported axes '{axes}': expected the last axes to be YX or YXS.")
+        leading = source.shape[:y_ax]
+        size_y, size_x = source.shape[y_ax], source.shape[x_ax]
+        logger.info(f"Source axes {axes}, shape {source.shape}, chunks {source.chunks}")
 
-    tifffile.imwrite(output_path, image, **write_kwargs)
+        def tiles():
+            for idx in itertools.product(*(range(n) for n in leading)):
+                for y in range(0, size_y, TILE_SIZE):
+                    for x in range(0, size_x, TILE_SIZE):
+                        yield source[idx + (slice(y, y + TILE_SIZE), slice(x, x + TILE_SIZE))]
+
+        logger.info(f"Writing compressed image to '{output_path}' using '{compression}'...")
+        tifffile.imwrite(
+            output_path,
+            tiles(),
+            shape=source.shape,
+            dtype=source.dtype,
+            photometric="rgb" if rgb else "minisblack",
+            tile=(TILE_SIZE, TILE_SIZE),
+            compression=target_compression,
+            bigtiff=True,
+            description=ome_xml_bytes,
+            # no tifffile "shaped" JSON description: it would shadow the OME-XML
+            metadata=None,
+            # caps tiles held by tifffile's encoder thread pool (default 512 MiB)
+            buffersize=WRITE_BUFFER_BYTES,
+        )
     logger.success(f"Successfully created '{output_path}' ✨")
 
 def main():

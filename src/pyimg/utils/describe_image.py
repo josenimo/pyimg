@@ -1,9 +1,10 @@
 from pathlib import Path
 import dask.array as da
-import dask_image.imread
 from loguru import logger
 import ome_types
 import tifffile
+
+from pyimg.utils.tiff_zarr import open_level_dask
 
 def describe_image(file_path: Path):
     """
@@ -21,72 +22,77 @@ def describe_image(file_path: Path):
         return
 
     try:
-        # --- Section 1: File Structure (Pyramid Check) ---
-        logger.info("\n## FILE STRUCTURE ##")
+        # keep the file open: the dask array reads from its file handle
         with tifffile.TiffFile(str(file_path)) as tif:
-            series = tif.series[0]
-            is_pyramid = len(series.levels) > 1
-            
-            if is_pyramid:
-                logger.info(f"Image is a pyramid")
-                num_levels = len(tif.series[0].levels)
-                logger.info(f"  - Levels: {num_levels}")
-                # Log the shape of each pyramid level
-                shapes = [level.shape for level in tif.series[0].levels]
-                logger.info(f"  - Level Shapes: {shapes}")
-
-        dask_arr = dask_image.imread.imread(str(file_path))
-        logger.info(f"Successfully loaded image with Dask.")
-
-        # OME METADATA
-        try:
-            ome = ome_types.from_tiff(file_path)
-            for i, image in enumerate(ome.images):
-
-                pixels = image.pixels
-                phys_x = f"{pixels.physical_size_x} {pixels.physical_size_x_unit.value}" if pixels.physical_size_x else "N/A"
-                pixels_info = (
-                    f"  - Image [{i}]: '{image.name or 'Unnamed'}'\n"
-                    f"    - Dimensions (Order: {pixels.dimension_order.value}): "
-                    f"X={pixels.size_x}, Y={pixels.size_y}, Z={pixels.size_z}, C={pixels.size_c}, T={pixels.size_t}\n"
-                    f"    - Pixel Type: {pixels.type.value}\n"
-                    f"    - Pixel Size (X): {phys_x}"
-                )
-                logger.info(pixels_info)
-
-                if pixels.channels:
-                    channel_names = [chan.name or 'Unnamed' for chan in pixels.channels]
-                    if len(channel_names) > 5:
-                        summary_names = ", ".join(channel_names[:5]) + f", ... and {len(channel_names) - 5} more channels"
-                    else:
-                        summary_names = ", ".join(channel_names)
-                    logger.info(f"    - Channels ({len(pixels.channels)}): [{summary_names}]")
-
-        except ValueError:
-            # This is common if the file is a standard TIFF without OME-XML
-            logger.info("-> No OME-XML metadata found in the file.")
-
-
-        # --- Section 2: Dask Array Properties ---
-        logger.info("\n## ARRAY PROPERTIES ##")
-        logger.info(f"-> Shape: {dask_arr.shape}")
-        logger.info(f"-> Data Type: {dask_arr.dtype}")
-        logger.info(f"-> Dask Chunks: {dask_arr.chunksize}")
-        logger.info(f"-> On-Disk Size: {dask_arr.nbytes / 1e9:.3f} GB")
-
-        # --- Section 3: Pixel Statistics ---
-        logger.info("\n## PIXEL STATISTICS ##")
-        logger.info("-> Computing min, max, and mean...")
-        min_val, max_val, mean_val = da.min(dask_arr), da.max(dask_arr), da.mean(dask_arr)
-        
-        # This triggers the actual computation
-        # CAN TAKE VERY LONG, CONSIDER TURNING OFF
-        min_res, max_res, mean_res = da.compute(min_val, max_val, mean_val)
-        
-        logger.info(f"-> Min Pixel Value: {min_res}")
-        logger.info(f"-> Max Pixel Value: {max_res}")
-        logger.info(f"-> Mean Pixel Value: {mean_res:.2f}")
-        logger.info("-" * (len(file_path.name) + 18))
-
+            _describe_open_tiff(tif, file_path)
     except Exception as e:
         logger.info(f"Failed to process {file_path}: {e}")
+
+
+def _describe_open_tiff(tif: tifffile.TiffFile, file_path: Path):
+    # --- Section 1: File Structure (Pyramid Check) ---
+    logger.info("\n## FILE STRUCTURE ##")
+    series = tif.series[0]
+    is_pyramid = len(series.levels) > 1
+
+    if is_pyramid:
+        logger.info(f"Image is a pyramid")
+        num_levels = len(series.levels)
+        logger.info(f"  - Levels: {num_levels}")
+        # Log the shape of each pyramid level
+        shapes = [level.shape for level in series.levels]
+        logger.info(f"  - Level Shapes: {shapes}")
+
+    # tile-chunked read; dask-image would load each full page as one chunk
+    dask_arr = open_level_dask(tif, level=0)
+    logger.info(f"Successfully loaded image with Dask.")
+
+    # OME METADATA
+    try:
+        ome = ome_types.from_tiff(file_path)
+        for i, image in enumerate(ome.images):
+
+            pixels = image.pixels
+            phys_x = f"{pixels.physical_size_x} {pixels.physical_size_x_unit.value}" if pixels.physical_size_x else "N/A"
+            pixels_info = (
+                f"  - Image [{i}]: '{image.name or 'Unnamed'}'\n"
+                f"    - Dimensions (Order: {pixels.dimension_order.value}): "
+                f"X={pixels.size_x}, Y={pixels.size_y}, Z={pixels.size_z}, C={pixels.size_c}, T={pixels.size_t}\n"
+                f"    - Pixel Type: {pixels.type.value}\n"
+                f"    - Pixel Size (X): {phys_x}"
+            )
+            logger.info(pixels_info)
+
+            if pixels.channels:
+                channel_names = [chan.name or 'Unnamed' for chan in pixels.channels]
+                if len(channel_names) > 5:
+                    summary_names = ", ".join(channel_names[:5]) + f", ... and {len(channel_names) - 5} more channels"
+                else:
+                    summary_names = ", ".join(channel_names)
+                logger.info(f"    - Channels ({len(pixels.channels)}): [{summary_names}]")
+
+    except ValueError:
+        # This is common if the file is a standard TIFF without OME-XML
+        logger.info("-> No OME-XML metadata found in the file.")
+
+
+    # --- Section 2: Dask Array Properties ---
+    logger.info("\n## ARRAY PROPERTIES ##")
+    logger.info(f"-> Shape: {dask_arr.shape}")
+    logger.info(f"-> Data Type: {dask_arr.dtype}")
+    logger.info(f"-> Dask Chunks: {dask_arr.chunksize}")
+    logger.info(f"-> On-Disk Size: {dask_arr.nbytes / 1e9:.3f} GB")
+
+    # --- Section 3: Pixel Statistics ---
+    logger.info("\n## PIXEL STATISTICS ##")
+    logger.info("-> Computing min, max, and mean...")
+    min_val, max_val, mean_val = da.min(dask_arr), da.max(dask_arr), da.mean(dask_arr)
+
+    # This triggers the actual computation
+    # CAN TAKE VERY LONG, CONSIDER TURNING OFF
+    min_res, max_res, mean_res = da.compute(min_val, max_val, mean_val)
+
+    logger.info(f"-> Min Pixel Value: {min_res}")
+    logger.info(f"-> Max Pixel Value: {max_res}")
+    logger.info(f"-> Mean Pixel Value: {mean_res:.2f}")
+    logger.info("-" * (len(file_path.name) + 18))
